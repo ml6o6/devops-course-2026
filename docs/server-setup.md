@@ -69,3 +69,23 @@ ClientAliveCountMax 2
 - `01-clean-install` — Ubuntu Server с OpenSSH и двумя сетевыми адаптерами.
 - `02-keys-configured` — отдельный `devops`, вход по ключу, исходные параметры SSH.
 - `03-ssh-hardened` — SSH на порту 2222 после проверки входа по ключу и отказов.
+
+
+## 8. Веб-сервер
+
+Установите `nginx` и `rsync` из репозитория Ubuntu. Служба `nginx.service` включена и запускается автоматически. Ресурс `devops.local` определён в `/etc/nginx/sites-available/devops-site`, включён одноимённой ссылкой в `sites-enabled`; стандартная ссылка `default` отключена.
+
+Каталог `/var/www/devops-site` принадлежит `devops:devops`, права каталога `755`, файлов `644`. Рабочие процессы `www-data` читают файлы. Для `/404.html` используется `error_page 404 /404.html`. Журналы: `/var/log/nginx/devops-site.access.log`, `/var/log/nginx/devops-site.error.log`.
+
+Для порта 80 используйте `return 301 https://$host$request_uri;`. Для порта 443 задайте `ssl_protocols TLSv1.2 TLSv1.3;` и укажите сертификат `/etc/ssl/certs/devops.crt` (root, `644`) и ключ `/etc/ssl/private/devops.key` (root, `600`).
+
+```bash
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/ssl/private/devops.key -out /etc/ssl/certs/devops.crt \
+  -subj /CN=devops.local -addext subjectAltName=DNS:devops.local
+sudo chmod 600 /etc/ssl/private/devops.key
+sudo chmod 644 /etc/ssl/certs/devops.crt
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+На хосте передайте открытый сертификат через SSH: `scp devops:/etc/ssl/certs/devops.crt ~/devops.crt`. Проверьте `curl --cacert ~/devops.crt -I https://devops.local/`. Из чистого рабочего дерева запустите `bash scripts/deploy.sh --dry-run`, затем `bash scripts/deploy.sh`.

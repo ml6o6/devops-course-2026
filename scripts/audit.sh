@@ -37,5 +37,24 @@ check 'Входящие подключения запрещены по умол�
 echo '[3] Учётные записи'
 awk -F: '$3 >= 1000 && $3 < 65534 {printf " %s (uid=%s)\n", $1, $3}' /etc/passwd
 
+echo '[4] Веб-сервер'
+check 'Служба Nginx активна' active "$(systemctl is-active nginx)"
+nginx_syntax=no
+if sudo nginx -t >/dev/null 2>&1; then nginx_syntax=yes; fi
+check 'Конфигурация Nginx корректна' yes "$nginx_syntax"
+cert_valid=no
+if openssl x509 -checkend "${AUDIT_CERT_MIN_SECONDS:-2592000}" \
+    -noout -in /etc/ssl/certs/devops.crt >/dev/null 2>&1; then
+    cert_valid=yes
+fi
+check 'Сертификат действителен не менее заданного срока' yes "$cert_valid"
+world_writable=$(find /var/www/devops-site -perm -o+w -print -quit)
+key_mode=$(sudo stat -c '%a' /etc/ssl/private/devops.key)
+if [[ -z $world_writable ]]; then
+    check 'Права ресурса и закрытого ключа' 600 "$key_mode"
+else
+    check 'Права ресурса и закрытого ключа' 600 "world-writable: $world_writable"
+fi
+
 printf 'Пройдено: %s, не пройдено: %s\n' "$PASS" "$FAIL"
 ((FAIL == 0))
