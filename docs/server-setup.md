@@ -89,3 +89,14 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 На хосте передайте открытый сертификат через SSH: `scp devops:/etc/ssl/certs/devops.crt ~/devops.crt`. Проверьте `curl --cacert ~/devops.crt -I https://devops.local/`. Из чистого рабочего дерева запустите `bash scripts/deploy.sh --dry-run`, затем `bash scripts/deploy.sh`.
+
+
+## 9. Контейнеризация
+
+Версии: Docker version 29.9.3, build 5457199; Docker Compose version v5.7.0. Установлены пакеты `docker-ce`, `docker-ce-cli`, `containerd.io`, `docker-buildx-plugin` и `docker-compose-plugin` из официального APT-репозитория `https://download.docker.com/linux/ubuntu`. Открытый ключ хранится в `/etc/apt/keyrings/docker.asc`, описание источника — в `/etc/apt/sources.list.d/docker.sources`. Служба Docker включена. Пользователь `devops` состоит в группе `docker`, дающей полномочия, эквивалентные root.
+
+Доставьте каталог проекта из корня репозитория командой `rsync -avz --delete --exclude=.env app/ devops:app/`. Проект находится в `/home/devops/app`. В этом каталоге создайте `.env` из `.env.example`, ограничьте права до `600` и замените заглушку `POSTGRES_PASSWORD` случайным значением `openssl rand -hex 16`. Рабочий файл хранится только на ВМ.
+
+Запуск: `docker compose up -d --build --wait`. Образ `devops-app:1.0` запускает Gunicorn как пользователь `app`. PostgreSQL `postgres:16-alpine` находится в сети `app_backend` под именем `db`, использует том `app_db_data` и не публикует порт 5432. Приложение публикуется как `127.0.0.1:5000:5000`. `docker compose down` сохраняет том, а `down -v` удаляет его.
+
+В HTTPS-блоке Nginx добавьте `location /app/` с `proxy_pass http://127.0.0.1:5000/;` и заголовками `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`. После `nginx -t` примените конфигурацию через `systemctl reload nginx`. Проверьте `https://devops.local/`, `https://devops.local/app/` и `https://devops.local/app/health` с доверенным сертификатом.

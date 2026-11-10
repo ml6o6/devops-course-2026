@@ -56,5 +56,17 @@ else
     check 'Права ресурса и закрытого ключа' 600 "world-writable: $world_writable"
 fi
 
+echo '[5] Контейнеризация'
+check 'Служба Docker активна' active "$(systemctl is-active docker)"
+db_health=$(docker inspect -f '{{.State.Health.Status}}' app-db-1 2>/dev/null)
+check 'PostgreSQL готов принимать соединения' healthy "$db_health"
+published_ports=$(ss -H -tln | awk '$4 ~ /:(5000|5432)$/ {print $4}')
+if [[ $published_ports == '127.0.0.1:5000' ]]; then
+    check 'Порт приложения доступен только через loopback, порт БД закрыт' yes yes
+else
+    check 'Порт приложения доступен только через loopback, порт БД закрыт' yes "$published_ports"
+fi
+check 'Права файла .env' 600 "$(stat -c '%a' "$HOME/app/.env")"
+
 printf 'Пройдено: %s, не пройдено: %s\n' "$PASS" "$FAIL"
 ((FAIL == 0))
